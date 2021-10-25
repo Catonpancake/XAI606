@@ -4,7 +4,9 @@ import random
 import SimpleITK as sitk  # For loading the dataset
 import torch
 import torch.nn as nn
+from PIL import Image
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 import os
 import math
 
@@ -14,7 +16,7 @@ def read_img(img_path):
     """    
     return sitk.GetArrayFromImage(sitk.ReadImage(img_path))
 
-def get_datapath(datadir, random_state, test_size = 0.25):
+def get_datapath(datadir, test_size = 0.25):
     dirs = []
     images = []
     masks = []
@@ -29,10 +31,12 @@ def get_datapath(datadir, random_state, test_size = 0.25):
     mask_list = []
     for i in range(len(dirs)):  
         imagePath = os.path.join(datadir, dirs[i], images[i])
-        maskPath = os.path.join(datadir, dirs[i], masks[i])    
-        image_list.append(imagePath)
-        mask_list.append(maskPath)       
+        maskPath = os.path.join(datadir, dirs[i], masks[i])
+        
+        image_list.append(datadir+imagePath)
+        mask_list.append(datadir+maskPath)       
     return image_list, mask_list
+
 
 
 class DataSegmentationLoader(Dataset):
@@ -41,15 +45,28 @@ class DataSegmentationLoader(Dataset):
         self.ground_truth = []
         if len(ground_list) > 0:
             self.ground_truth = ground_list
+            
+        self.image_transform = transforms.Compose([                                
+                                transforms.Resize((256, 256)),
+                                transforms.ToTensor(),
+                                transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5))
+                            ])
+        self.label_transform = transforms.Compose([                                
+                                transforms.Resize((256, 256)),
+                                transforms.ToTensor()                                
+                            ])        
+
     def __len__(self):
         return len(self.sample)
 
     def __getitem__(self, idx):
         #Load Data        
-        data = read_img(self.sample[idx]).reshape(3,256,256)/255
+        data = Image.open(self.sample[idx])
+        data = self.image_transform(data)                
         if len(self.ground_truth) > 0:
-            label = read_img(self.ground_truth[idx]).reshape(1,256,256)/255
+            label = Image.open(self.ground_truth[idx])
+            label = self.label_transform(label)        
         else:
             label = np.zeros((1,256,256))
         
-        return torch.from_numpy(data).float(), torch.from_numpy(label).long()
+        return data, label
